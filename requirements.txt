@@ -1,0 +1,22 @@
+# ===== Red Team LLM - Dependencias =====
+# Proyecto: Red Teaming sobre Modelos de Lenguaje Locales
+# Python 3.11+ requerido
+
+# --- Capa 1: Target (FastAPI) ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# --- Cliente HTTP async ---
+httpx>=0.28.0
+
+# --- Validación de datos entre capas ---
+pydantic>=2.10.0
+
+# --- Persistencia ---
+aiosqlite>=0.21.0
+
+# --- Dashboard ---
+streamlit>=1.41.0
+
+# --- CLI output ---
+rich>=13.9.0
