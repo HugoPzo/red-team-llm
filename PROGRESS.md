@@ -7,9 +7,9 @@
 
 ## Estado actual
 
-- **Fase activa:** F3 — Vectores V2-V5 ✅ COMPLETADA
-- **Última actualización:** 2026-04-29
-- **Próximo hito:** F4 — Persistencia y logging — SQLite + JSON logs
+- **Fase activa:** F4 — Persistencia y logging ✅ COMPLETADA
+- **Última actualización:** 2026-04-30
+- **Próximo hito:** F5 — Guardrail Rule-Based — regex + heurísticas
 
 ---
 
@@ -162,13 +162,28 @@ Decisiones arquitectónicas adicionales:
 ---
 
 ### F4 — Persistencia y logging
-**Estado:** [ ] no iniciada
+**Estado:** [x] completada
 
 Tareas:
-- [ ] `data/schema.sql` ejecutado
-- [ ] Logging integrado en attack_runner
-- [ ] JSON logs por sesión
-- [ ] Queries SQL del dashboard validadas
+- [x] `data/schema.sql` — 4 tablas (sessions, attacks, guardrail_decisions, results) + 4 índices
+- [x] `data/db.py` — clase Database async con aiosqlite, init idempotente, save_batch, JSON logs
+- [x] Logging integrado en attack_runner — método run_campaign() con persistencia automática
+- [x] JSON logs por sesión — data/logs/{session_id}.json con resumen + resultados completos
+- [x] Queries SQL del dashboard validadas — 3 queries (pivote, detalle, métricas)
+
+Evidencia generada:
+- SQLite poblado: 1 sesión, 3 attacks, 3 results (V1 con persistencia)
+- JSON log: data/logs/ceea3091-eae5-4862-8695-86fc0b669176.json (7.5 KB)
+- Query pivote: agrupa por vector_id × guardrail_mode × classification
+- Query detalle: payload + respuesta + clasificación por ataque
+- Query métricas: tasa de detección, latencia promedio/máx/mín
+
+Notas:
+- aiosqlite mantiene consistencia con el runner async (httpx, FastAPI)
+- JSON logs son redundancia intencional: SQLite para queries, JSON para portabilidad
+- init_db() es idempotente (CREATE IF NOT EXISTS)
+- guardrail_decisions se puebla en F5/F6
+- vram_peak_mb se mide en F6
 
 ---
 

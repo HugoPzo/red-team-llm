@@ -1,18 +1,17 @@
 """
 Orquestador del Red Team Agent.
 
-Ejecuta vectores de ataque contra el target y muestra resultados
-con formato rico en la terminal usando rich.
-
-Este módulo es el punto de entrada para ejecutar ataques.
-En F4 se le agregará persistencia a SQLite.
+Ejecuta vectores de ataque contra el target, muestra resultados
+con formato rico en la terminal, y persiste todo en SQLite + JSON.
 
 Ejecución:
-    python -m attacker.attack_runner
+    python -m attacker.attack_runner              # todos los vectores
+    python -m attacker.attack_runner V1           # solo V1
+    python -m attacker.attack_runner V1 V3        # V1 y V3
 
 Ejemplo de uso programático:
     runner = AttackRunner(target_url="http://localhost:8000")
-    results = await runner.run_vector("V1")
+    results = await runner.run_campaign()
 """
 
 import asyncio
@@ -33,6 +32,7 @@ from attacker.vectors.v2_jailbreak_roleplay import JailbreakRoleplay
 from attacker.vectors.v3_indirect_injection import IndirectInjection
 from attacker.vectors.v4_prompt_extraction import PromptExtraction
 from attacker.vectors.v5_context_manipulation import ContextManipulation
+from data.db import Database
 
 
 # ===== Registro de vectores disponibles =====
@@ -61,8 +61,8 @@ class AttackRunner:
 
     Responsabilidades:
     - Instanciar y ejecutar vectores de ataque
-    - Formatear y mostrar resultados en terminal
-    - (F4) Persistir resultados en SQLite y JSON
+    - Formatear y mostrar resultados en terminal (rich)
+    - Persistir resultados en SQLite y JSON (data/db.py)
 
     Decisión de diseño: el runner es independiente del target.
     Solo necesita la URL. No importa si hay guardrails o no;
@@ -76,6 +76,7 @@ class AttackRunner:
     ) -> None:
         self.target_url = target_url
         self.guardrail_mode = guardrail_mode
+        self._db = Database()
 
     async def run_vector(self, vector_id: str) -> list[AttackResult]:
         """
@@ -111,19 +112,60 @@ class AttackRunner:
         self._display_results(results)
         return results
 
-    async def run_all(self) -> list[AttackResult]:
+    async def run_campaign(
+        self, vector_ids: Optional[list[str]] = None
+    ) -> list[AttackResult]:
         """
-        Ejecuta todos los vectores registrados secuencialmente.
+        Ejecuta una campaña completa con persistencia.
 
-        Retorna la lista combinada de resultados de todos los vectores.
+        Flujo:
+        1. Inicializa la base de datos (idempotente)
+        2. Crea una sesión nueva
+        3. Ejecuta los vectores solicitados (o todos)
+        4. Persiste cada resultado en SQLite
+        5. Escribe JSON log de la sesión
+        6. Muestra resumen
+        7. Cierra la DB
+
+        Este es el método principal — reemplaza a run_all().
         """
+        # Inicializar DB
+        await self._db.init_db()
+
+        # Crear sesión
+        db_session_id = await self._db.create_session(
+            guardrail_mode=self.guardrail_mode,
+        )
+        console.print(
+            f"\n[dim]📁 Sesión: {db_session_id}[/dim]"
+            f"\n[dim]💾 Persistencia: SQLite + JSON[/dim]\n"
+        )
+
+        # Determinar qué vectores ejecutar
+        targets = vector_ids or list(VECTOR_REGISTRY.keys())
         all_results: list[AttackResult] = []
 
-        for vector_id in VECTOR_REGISTRY:
+        for vector_id in targets:
             results = await self.run_vector(vector_id)
             all_results.extend(results)
 
-        self._display_summary(all_results)
+            # Persistir cada lote de resultados inmediatamente
+            await self._db.save_batch(db_session_id, results)
+
+        # Finalizar sesión
+        await self._db.finish_session(db_session_id)
+
+        # Escribir JSON log
+        log_path = self._db.save_json_log(
+            db_session_id, all_results, self.guardrail_mode
+        )
+
+        # Mostrar resumen
+        self._display_summary(all_results, db_session_id, log_path)
+
+        # Cerrar DB
+        await self._db.close()
+
         return all_results
 
     def _display_results(self, results: list[AttackResult]) -> None:
@@ -150,7 +192,12 @@ class AttackRunner:
 
         console.print(table)
 
-    def _display_summary(self, results: list[AttackResult]) -> None:
+    def _display_summary(
+        self,
+        results: list[AttackResult],
+        db_session_id: str = "",
+        log_path: Optional[Path] = None,
+    ) -> None:
         """Muestra resumen final de todos los vectores ejecutados."""
         console.print("\n")
 
@@ -179,28 +226,34 @@ class AttackRunner:
             f"[green bold]{counts['BLOCKED']}[/green bold] ({counts['BLOCKED']*100//total}%)" if total else "0",
         )
 
+        if db_session_id:
+            summary_table.add_row("", "")
+            summary_table.add_row("Sesión DB", f"[dim]{db_session_id}[/dim]")
+        if log_path:
+            summary_table.add_row("JSON log", f"[dim]{log_path}[/dim]")
+
         console.print(summary_table)
 
 
 # ===== Ejecución directa =====
 
 
-async def main(vector_id: Optional[str] = None) -> None:
+async def main(vector_ids: Optional[list[str]] = None) -> None:
     """
     Punto de entrada principal.
 
-    Si se pasa un vector_id, ejecuta solo ese vector.
+    Si se pasan vector_ids, ejecuta solo esos vectores.
     Si no, ejecuta todos los registrados.
+    Siempre persiste a SQLite + JSON.
     """
     runner = AttackRunner()
-
-    if vector_id:
-        await runner.run_vector(vector_id)
-    else:
-        await runner.run_all()
+    await runner.run_campaign(vector_ids=vector_ids or None)
 
 
 if __name__ == "__main__":
-    # Permitir pasar vector como argumento: python -m attacker.attack_runner V1
-    vector = sys.argv[1] if len(sys.argv) > 1 else None
-    asyncio.run(main(vector))
+    # Permitir pasar vectores como argumentos:
+    #   python -m attacker.attack_runner V1         (solo V1)
+    #   python -m attacker.attack_runner V1 V3      (V1 y V3)
+    #   python -m attacker.attack_runner             (todos)
+    vectors = sys.argv[1:] if len(sys.argv) > 1 else None
+    asyncio.run(main(vectors))
