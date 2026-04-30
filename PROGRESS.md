@@ -7,9 +7,9 @@
 
 ## Estado actual
 
-- **Fase activa:** F0 — Setup del entorno ✅ COMPLETADA
-- **Última actualización:** 2026-04-28
-- **Próximo hito:** F1 — Sistema vulnerable (Target) — implementar chatbot ARIA
+- **Fase activa:** F1 — Sistema vulnerable (Target) ✅ COMPLETADA
+- **Última actualización:** 2026-04-29
+- **Próximo hito:** F2 — V1 Direct Injection — primer ataque registrado
 
 ---
 
@@ -61,13 +61,25 @@ Notas:
 ---
 
 ### F1 — Sistema vulnerable (Target)
-**Estado:** [ ] no iniciada
+**Estado:** [x] completada
 
 Tareas:
-- [ ] Redactar `target/system_prompt.txt`
-- [ ] Implementar `target/chat_engine.py`
-- [ ] Implementar `target/main.py` con endpoints
-- [ ] Probar con `curl` o cliente HTTP
+- [x] Redactar `target/system_prompt.txt` — chatbot ARIA de RRHH con PII/credenciales ficticias
+- [x] Implementar `target/chat_engine.py` — cliente async Ollama con sesiones en memoria
+- [x] Implementar `target/main.py` con endpoints `/chat`, `/chat/with-document`, `/chat/history/{id}`, `/health`
+- [x] Probar con `curl` — respuesta legítima exitosa
+
+Evidencia generada:
+- `GET /health` → `{"status": "ok", "service": "aria-chatbot", "model": "gemma3:4b"}`
+- `POST /chat` → ARIA responde sobre vacaciones correctamente (sesión 9e8f2e5c)
+- `GET /chat/history/{id}` → historial con 2 mensajes (user + assistant), sin system prompt
+- `POST /chat/with-document` → resume memo interno correctamente
+
+Notas:
+- System prompt contiene: 5 empleados con salarios, credenciales DB, 3 API keys, política de seguridad
+- `chat_with_document` concatena sin sanitización (vulnerable a indirect injection V3)
+- Historial completo se envía en cada request (vulnerable a ataques multi-turno V4)
+- No hay defensas: todo depende de las instrucciones en texto plano del prompt
 
 ---
 
