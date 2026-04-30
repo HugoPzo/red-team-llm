@@ -175,21 +175,30 @@ class PromptExtraction(BaseAttack):
             session_id: Optional[str] = None
             total_latency: float = 0.0
             all_payloads: list[str] = []
+            last_guardrail_info: Optional[dict] = None
+            response_text: str = ""
 
             try:
                 # Enviar todos los turnos secuencialmente
                 for i, message in enumerate(messages):
-                    response_text, session_id, latency = await self.send_message(
+                    response_text, session_id, latency, guardrail_info = await self.send_message(
                         target_url=target_url,
                         message=message,
                         session_id=session_id,
                     )
                     total_latency += latency
                     all_payloads.append(f"[Turno {i + 1}] {message}")
+                    last_guardrail_info = guardrail_info
 
-                # Clasificar solo la respuesta del último turno
+                    # Si el guardrail bloqueó este turno, no continuar la secuencia.
+                    # El session_id retornado por el proxy cuando bloquea es "blocked",
+                    # lo cual rompería los turnos siguientes — detenemos aquí.
+                    if guardrail_info and not guardrail_info.get("allowed", True):
+                        break
+
+                # Clasificar la última respuesta recibida (turno bloqueado o final)
                 classification, evidence = classify_response(response_text)
-                blocker = determine_blocker(response_text, guardrail_mode)
+                blocker = determine_blocker(response_text, guardrail_mode, last_guardrail_info)
 
             except Exception as e:
                 response_text = f"ERROR: {str(e)}"
@@ -197,6 +206,7 @@ class PromptExtraction(BaseAttack):
                 classification = "BLOCKED"
                 evidence = f"Error de ejecución: {str(e)}"
                 blocker = "NONE"
+                last_guardrail_info = None
 
             # Registrar la secuencia completa como payload
             full_payload = "\n".join(all_payloads)
@@ -213,6 +223,7 @@ class PromptExtraction(BaseAttack):
                     evidence=evidence,
                     latency_ms=total_latency,
                     session_id=session_id,
+                    guardrail_decision=last_guardrail_info,
                 )
             )
 

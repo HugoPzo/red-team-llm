@@ -182,17 +182,59 @@ class Database:
         self,
         db_session_id: str,
         results: list[AttackResult],
+        guardrail_decisions: Optional[list[dict]] = None,
     ) -> list[int]:
         """
         Persiste una lista de resultados (todos los de un vector o campaña).
 
+        Si se proporcionan guardrail_decisions, también las persiste.
+        Cada decisión se vincula al attack_id correspondiente por índice.
+
         Retorna la lista de attack_ids generados.
         """
         attack_ids: list[int] = []
-        for result in results:
+        for i, result in enumerate(results):
             aid = await self.save_attack_result(db_session_id, result)
             attack_ids.append(aid)
+
+            # Persistir decisión del guardrail si existe
+            if guardrail_decisions and i < len(guardrail_decisions):
+                gd = guardrail_decisions[i]
+                if gd:  # puede ser None si no hubo guardrail
+                    await self.save_guardrail_decision(aid, gd)
+
         return attack_ids
+
+    async def save_guardrail_decision(
+        self,
+        attack_id: int,
+        decision: dict,
+    ) -> None:
+        """
+        Persiste una decisión del guardrail en la tabla guardrail_decisions.
+
+        Parámetros:
+            attack_id: FK al ataque evaluado
+            decision: dict con keys: mode, allow, reason, matched_pattern,
+                      confidence, latency_ms
+        """
+        assert self._connection, "Llamar a init_db() primero"
+
+        await self._connection.execute(
+            """INSERT INTO guardrail_decisions
+               (attack_id, mode, allow, reason, matched_pattern, confidence, latency_ms)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                attack_id,
+                decision.get("mode", "RULE"),
+                1 if decision.get("allowed", True) else 0,
+                decision.get("reason", ""),
+                decision.get("matched_pattern", ""),
+                decision.get("confidence", 1.0),
+                decision.get("latency_ms", 0.0),
+            ),
+        )
+        await self._connection.commit()
 
     # ===== JSON logs =====
 

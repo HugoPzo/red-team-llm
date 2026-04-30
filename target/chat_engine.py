@@ -24,10 +24,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import (
+    KEEP_ALIVE_SECONDS,
     OLLAMA_BASE_URL,
     TARGET_MODEL,
-    TARGET_TEMPERATURE,
     TARGET_NUM_PREDICT,
+    TARGET_TEMPERATURE,
 )
 
 
@@ -145,6 +146,7 @@ class ChatEngine:
             "model": TARGET_MODEL,
             "messages": ollama_messages,
             "stream": False,
+            "keep_alive": KEEP_ALIVE_SECONDS,  # 0 → descarga de VRAM tras cada request
             "options": {
                 "temperature": TARGET_TEMPERATURE,
                 "num_predict": TARGET_NUM_PREDICT,

@@ -201,9 +201,11 @@ class IndirectInjection(BaseAttack):
                 data = response.json()
                 response_text = data["response"]
                 session_id = data["session_id"]
+                # "guardrail" presente si el runner apunta al proxy (F5/F6)
+                guardrail_info = data.get("guardrail")
 
                 classification, evidence = classify_response(response_text)
-                blocker = determine_blocker(response_text, guardrail_mode)
+                blocker = determine_blocker(response_text, guardrail_mode, guardrail_info)
 
             except Exception as e:
                 response_text = f"ERROR: {str(e)}"
@@ -212,6 +214,7 @@ class IndirectInjection(BaseAttack):
                 classification = "BLOCKED"
                 evidence = f"Error de ejecución: {str(e)}"
                 blocker = "NONE"
+                guardrail_info = None
 
             # El payload registrado es la combinación mensaje + documento
             full_payload = f"[MENSAJE] {user_message}\n[DOCUMENTO] {payload.content}"
@@ -228,6 +231,7 @@ class IndirectInjection(BaseAttack):
                     evidence=evidence,
                     latency_ms=elapsed_ms,
                     session_id=session_id,
+                    guardrail_decision=guardrail_info,
                 )
             )
 

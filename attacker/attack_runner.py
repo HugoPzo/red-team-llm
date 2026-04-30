@@ -14,6 +14,7 @@ Ejemplo de uso programático:
     results = await runner.run_campaign()
 """
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -149,8 +150,10 @@ class AttackRunner:
             results = await self.run_vector(vector_id)
             all_results.extend(results)
 
-            # Persistir cada lote de resultados inmediatamente
-            await self._db.save_batch(db_session_id, results)
+            # Extraer decisiones del guardrail (None para cada result en modo NONE)
+            guardrail_decisions = [r.guardrail_decision for r in results]
+            # Persistir lote con decisiones del guardrail
+            await self._db.save_batch(db_session_id, results, guardrail_decisions)
 
         # Finalizar sesión
         await self._db.finish_session(db_session_id)
@@ -238,22 +241,53 @@ class AttackRunner:
 # ===== Ejecución directa =====
 
 
-async def main(vector_ids: Optional[list[str]] = None) -> None:
+async def main() -> None:
     """
     Punto de entrada principal.
 
-    Si se pasan vector_ids, ejecuta solo esos vectores.
-    Si no, ejecuta todos los registrados.
-    Siempre persiste a SQLite + JSON.
+    Argumentos opcionales:
+        --mode NONE|RULE|JUDGE  — guardrail activo (default: NONE)
+        --url  http://...       — URL del target/proxy (default: según modo)
+        V1 V2 ...               — vectores a ejecutar (default: todos)
+
+    Ejemplos:
+        python -m attacker.attack_runner                     # NONE, todos
+        python -m attacker.attack_runner V1 V3               # NONE, V1 y V3
+        python -m attacker.attack_runner --mode RULE         # RULE, todos
+        python -m attacker.attack_runner --mode RULE V1      # RULE, solo V1
     """
-    runner = AttackRunner()
-    await runner.run_campaign(vector_ids=vector_ids or None)
+    parser = argparse.ArgumentParser(
+        description="Red Team Agent — orquestador de ataques"
+    )
+    parser.add_argument(
+        "vectors",
+        nargs="*",
+        help="Vectores a ejecutar (V1-V5). Sin argumentos ejecuta todos.",
+    )
+    parser.add_argument(
+        "--mode",
+        default="NONE",
+        choices=["NONE", "RULE", "JUDGE"],
+        help="Modo de guardrail activo (default: NONE)",
+    )
+    parser.add_argument(
+        "--url",
+        default=None,
+        help="URL del target o proxy. Por defecto: 8000 para NONE, 8001 para RULE/JUDGE.",
+    )
+    args = parser.parse_args()
+
+    # URL automática según modo si no se especificó explícitamente
+    url_by_mode: dict[str, str] = {
+        "NONE": "http://localhost:8000",
+        "RULE": "http://localhost:8001",
+        "JUDGE": "http://localhost:8001",
+    }
+    target_url = args.url or url_by_mode[args.mode]
+
+    runner = AttackRunner(target_url=target_url, guardrail_mode=args.mode)
+    await runner.run_campaign(vector_ids=args.vectors or None)
 
 
 if __name__ == "__main__":
-    # Permitir pasar vectores como argumentos:
-    #   python -m attacker.attack_runner V1         (solo V1)
-    #   python -m attacker.attack_runner V1 V3      (V1 y V3)
-    #   python -m attacker.attack_runner             (todos)
-    vectors = sys.argv[1:] if len(sys.argv) > 1 else None
-    asyncio.run(main(vectors))
+    asyncio.run(main())
