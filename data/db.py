@@ -378,6 +378,39 @@ class Database:
                 for row in rows
             ]
 
+    async def query_blocker_distribution(self) -> list[dict[str, Any]]:
+        """
+        Distribución de quién bloqueó los ataques por modo.
+
+        Retorna conteo agrupado por guardrail_mode × blocked_by.
+        Útil para la Vista 3 del dashboard: mostrar el rol de
+        SHIELD_GEMMA vs GUARDRAIL_RULE vs GUARDRAIL_JUDGE.
+        """
+        assert self._connection, "Llamar a init_db() primero"
+
+        query = """
+            SELECT
+                s.guardrail_mode,
+                r.blocked_by,
+                COUNT(*) as count
+            FROM sessions s
+            JOIN attacks a ON s.session_id = a.session_id
+            JOIN results r ON a.attack_id = r.attack_id
+            WHERE r.classification = 'BLOCKED'
+            GROUP BY s.guardrail_mode, r.blocked_by
+            ORDER BY s.guardrail_mode, r.blocked_by
+        """
+        async with self._connection.execute(query) as cursor:
+            rows = await cursor.fetchall()
+            return [
+                {
+                    "guardrail_mode": row[0],
+                    "blocked_by": row[1],
+                    "count": row[2],
+                }
+                for row in rows
+            ]
+
     async def query_defense_metrics(self) -> list[dict[str, Any]]:
         """
         Vista 3 del dashboard: métricas de defensa (latencia, detección).
