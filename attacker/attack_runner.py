@@ -29,13 +29,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from attacker.vectors.base import AttackResult, BaseAttack
 from attacker.vectors.v1_direct_injection import DirectInjection
+from attacker.vectors.v2_jailbreak_roleplay import JailbreakRoleplay
+from attacker.vectors.v3_indirect_injection import IndirectInjection
+from attacker.vectors.v4_prompt_extraction import PromptExtraction
+from attacker.vectors.v5_context_manipulation import ContextManipulation
 
 
 # ===== Registro de vectores disponibles =====
-# Se expande en F3 cuando se agreguen V2-V5
 
 VECTOR_REGISTRY: dict[str, type[BaseAttack]] = {
     "V1": DirectInjection,
+    "V2": JailbreakRoleplay,
+    "V3": IndirectInjection,
+    "V4": PromptExtraction,
+    "V5": ContextManipulation,
 }
 
 # Mapeo de colores por clasificación para la terminal

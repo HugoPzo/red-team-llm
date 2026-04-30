@@ -45,7 +45,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Solicitud de chat entrante al endpoint."""
 
-    message: str = Field(..., min_length=1, max_length=4096)
+    message: str = Field(..., min_length=1, max_length=32768)
     session_id: Optional[str] = Field(
         default=None,
         description="ID de sesión existente. Si es None, se crea una nueva.",
