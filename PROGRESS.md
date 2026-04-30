@@ -7,9 +7,9 @@
 
 ## Estado actual
 
-- **Fase activa:** F7 — Dashboard Streamlit ✅ COMPLETADA
+- **Fase activa:** F8 — Chat Interface ✅ COMPLETADA
 - **Última actualización:** 2026-04-30
-- **Próximo hito:** F8 — Documento académico
+- **Próximo hito:** F9 — Documento académico
 
 ---
 
@@ -318,7 +318,19 @@ query_blocker_distribution() añadida a db.py para Vista 3.
 
 ---
 
-### F8 — Documento académico
+### F8 — Chat Interface interactivo
+**Estado:** [x] completada
+
+Tareas:
+- [x] Página Streamlit multipage: `dashboard/pages/1_Chat_ARIA.py`
+- [x] Selector de modo NONE / RULE / JUDGE en sidebar
+- [x] Panel debug (sidebar): decisión del guardrail, confianza, latencia, patrón
+- [x] Soporte para documento adjunto (/chat/with-document)
+- [x] Historial de conversación multi-turno con session_id persistido
+
+---
+
+### F9 — Documento académico
 **Estado:** [ ] no iniciada
 
 Tareas:
